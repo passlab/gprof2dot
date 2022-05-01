@@ -32,6 +32,7 @@ import collections
 import locale
 import json
 import fnmatch
+import rdflib as rdf
 
 # Python 2.x/3.x compatibility
 if sys.version_info[0] >= 3:
@@ -155,7 +156,7 @@ labels = {
     'total-time': TOTAL_TIME,
     'total-time-percentage': TOTAL_TIME_RATIO,
 }
-defaultLabelNames = ['total-time-percentage', 'self-time-percentage']
+defaultLabelNames = ['total-time', 'self-time']
 
 totalMethod = 'callratios'
 
@@ -2953,185 +2954,6 @@ formats = {
 ########################################################################
 # Output
 
-
-class Theme:
-
-    def __init__(self,
-            bgcolor = (0.0, 0.0, 1.0),
-            mincolor = (0.0, 0.0, 0.0),
-            maxcolor = (0.0, 0.0, 1.0),
-            fontname = "Arial",
-            fontcolor = "white",
-            nodestyle = "filled",
-            minfontsize = 10.0,
-            maxfontsize = 10.0,
-            minpenwidth = 0.5,
-            maxpenwidth = 4.0,
-            gamma = 2.2,
-            skew = 1.0):
-        self.bgcolor = bgcolor
-        self.mincolor = mincolor
-        self.maxcolor = maxcolor
-        self.fontname = fontname
-        self.fontcolor = fontcolor
-        self.nodestyle = nodestyle
-        self.minfontsize = minfontsize
-        self.maxfontsize = maxfontsize
-        self.minpenwidth = minpenwidth
-        self.maxpenwidth = maxpenwidth
-        self.gamma = gamma
-        self.skew = skew
-
-    def graph_bgcolor(self):
-        return self.hsl_to_rgb(*self.bgcolor)
-
-    def graph_fontname(self):
-        return self.fontname
-
-    def graph_fontcolor(self):
-        return self.fontcolor
-
-    def graph_fontsize(self):
-        return self.minfontsize
-
-    def node_bgcolor(self, weight):
-        return self.color(weight)
-
-    def node_fgcolor(self, weight):
-        if self.nodestyle == "filled":
-            return self.graph_bgcolor()
-        else:
-            return self.color(weight)
-
-    def node_fontsize(self, weight):
-        return self.fontsize(weight)
-
-    def node_style(self):
-        return self.nodestyle
-
-    def edge_color(self, weight):
-        return self.color(weight)
-
-    def edge_fontsize(self, weight):
-        return self.fontsize(weight)
-
-    def edge_penwidth(self, weight):
-        return max(weight*self.maxpenwidth, self.minpenwidth)
-
-    def edge_arrowsize(self, weight):
-        return 0.5 * math.sqrt(self.edge_penwidth(weight))
-
-    def fontsize(self, weight):
-        return max(weight**2 * self.maxfontsize, self.minfontsize)
-
-    def color(self, weight):
-        weight = min(max(weight, 0.0), 1.0)
-
-        hmin, smin, lmin = self.mincolor
-        hmax, smax, lmax = self.maxcolor
-
-        if self.skew < 0:
-            raise ValueError("Skew must be greater than 0")
-        elif self.skew == 1.0:
-            h = hmin + weight*(hmax - hmin)
-            s = smin + weight*(smax - smin)
-            l = lmin + weight*(lmax - lmin)
-        else:
-            base = self.skew
-            h = hmin + ((hmax-hmin)*(-1.0 + (base ** weight)) / (base - 1.0))
-            s = smin + ((smax-smin)*(-1.0 + (base ** weight)) / (base - 1.0))
-            l = lmin + ((lmax-lmin)*(-1.0 + (base ** weight)) / (base - 1.0))
-
-        return self.hsl_to_rgb(h, s, l)
-
-    def hsl_to_rgb(self, h, s, l):
-        """Convert a color from HSL color-model to RGB.
-
-        See also:
-        - http://www.w3.org/TR/css3-color/#hsl-color
-        """
-
-        h = h % 1.0
-        s = min(max(s, 0.0), 1.0)
-        l = min(max(l, 0.0), 1.0)
-
-        if l <= 0.5:
-            m2 = l*(s + 1.0)
-        else:
-            m2 = l + s - l*s
-        m1 = l*2.0 - m2
-        r = self._hue_to_rgb(m1, m2, h + 1.0/3.0)
-        g = self._hue_to_rgb(m1, m2, h)
-        b = self._hue_to_rgb(m1, m2, h - 1.0/3.0)
-
-        # Apply gamma correction
-        r **= self.gamma
-        g **= self.gamma
-        b **= self.gamma
-
-        return (r, g, b)
-
-    def _hue_to_rgb(self, m1, m2, h):
-        if h < 0.0:
-            h += 1.0
-        elif h > 1.0:
-            h -= 1.0
-        if h*6 < 1.0:
-            return m1 + (m2 - m1)*h*6.0
-        elif h*2 < 1.0:
-            return m2
-        elif h*3 < 2.0:
-            return m1 + (m2 - m1)*(2.0/3.0 - h)*6.0
-        else:
-            return m1
-
-
-TEMPERATURE_COLORMAP = Theme(
-    mincolor = (2.0/3.0, 0.80, 0.25), # dark blue
-    maxcolor = (0.0, 1.0, 0.5), # satured red
-    gamma = 1.0
-)
-
-PINK_COLORMAP = Theme(
-    mincolor = (0.0, 1.0, 0.90), # pink
-    maxcolor = (0.0, 1.0, 0.5), # satured red
-)
-
-GRAY_COLORMAP = Theme(
-    mincolor = (0.0, 0.0, 0.85), # light gray
-    maxcolor = (0.0, 0.0, 0.0), # black
-)
-
-BW_COLORMAP = Theme(
-    minfontsize = 8.0,
-    maxfontsize = 24.0,
-    mincolor = (0.0, 0.0, 0.0), # black
-    maxcolor = (0.0, 0.0, 0.0), # black
-    minpenwidth = 0.1,
-    maxpenwidth = 8.0,
-)
-
-PRINT_COLORMAP = Theme(
-    minfontsize = 18.0,
-    maxfontsize = 30.0,
-    fontcolor = "black",
-    nodestyle = "solid",
-    mincolor = (0.0, 0.0, 0.0), # black
-    maxcolor = (0.0, 0.0, 0.0), # black
-    minpenwidth = 0.1,
-    maxpenwidth = 8.0,
-)
-
-
-themes = {
-    "color": TEMPERATURE_COLORMAP,
-    "pink": PINK_COLORMAP,
-    "gray": GRAY_COLORMAP,
-    "bw": BW_COLORMAP,
-    "print": PRINT_COLORMAP,
-}
-
-
 def sorted_iteritems(d):
     # Used mostly for result reproducibility (while testing.)
     keys = compat_keys(d)
@@ -3141,12 +2963,9 @@ def sorted_iteritems(d):
         yield key, value
 
 
-class DotWriter:
-    """Writer for the DOT language.
+class RdfWriter:
+    """Writer for the RDF dynamic callgraph
 
-    See also:
-    - "The DOT Language" specification
-      http://www.graphviz.org/doc/info/lang.html
     """
 
     strip = False
@@ -3154,9 +2973,24 @@ class DotWriter:
 
     def __init__(self, fp):
         self.fp = fp
+        self._graph = rdf.Graph()
+        self.namespace = {
+            "hpc": rdf.Namespace('https://github.com/HPC-FAIR/HPC-Ontology#'),
+            "func": rdf.Namespace('https://example.org/function#'),
+            "cs": rdf.Namespace('https://example.org/callsite#'),
+            "cp": rdf.Namespace('https://example.org/callpath#'),
+            "rdf": rdf.Namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#')
+        }
+
+        self.profilingNodes = {
+            "Total time": self.namespace["hpc"].totalTime,
+            "Time": self.namespace["hpc"].selfTime,
+            "Calls": self.namespace["hpc"].called
+        }
 
     def wrap_function_name(self, name):
         """Split the function name on multiple lines."""
+
 
         if len(name) > 32:
             ratio = 2.0/3.0
@@ -3172,26 +3006,20 @@ class DotWriter:
 
         return name
 
-    show_function_events = [TOTAL_TIME_RATIO, TIME_RATIO]
-    show_edge_events = [TOTAL_TIME_RATIO, CALLS]
+    show_function_events = [TOTAL_TIME, TIME]
+    show_edge_events = [TOTAL_TIME, TIME, CALLS]
 
-    def graph(self, profile, theme):
-        self.begin_graph()
-
-        fontname = theme.graph_fontname()
-        fontcolor = theme.graph_fontcolor()
-        nodestyle = theme.node_style()
-
-        self.attr('graph', fontname=fontname, ranksep=0.25, nodesep=0.125)
-        self.attr('node', fontname=fontname, shape="box", style=nodestyle, fontcolor=fontcolor, width=0, height=0)
-        self.attr('edge', fontname=fontname)
+    def graph(self, profile):
 
         for _, function in sorted_iteritems(profile.functions):
-            labels = []
-            if function.process is not None:
-                labels.append(function.process)
-            if function.module is not None:
-                labels.append(function.module)
+            #labels = []
+            function_node = self.namespace["func"][function.name]
+
+            self._graph.add((
+                function_node,
+                self.namespace["rdf"].type,
+                self.namespace["hpc"].Function
+            ))
 
             if self.strip:
                 function_name = function.stripped_name()
@@ -3201,141 +3029,83 @@ class DotWriter:
             # dot can't parse quoted strings longer than YY_BUF_SIZE, which
             # defaults to 16K. But some annotated C++ functions (e.g., boost,
             # https://github.com/jrfonseca/gprof2dot/issues/30) can exceed that
-            MAX_FUNCTION_NAME = 4096
-            if len(function_name) >= MAX_FUNCTION_NAME:
-                sys.stderr.write('warning: truncating function name with %u chars (%s)\n' % (len(function_name), function_name[:32] + '...'))
-                function_name = function_name[:MAX_FUNCTION_NAME - 1] + unichr(0x2026)
+            #MAX_FUNCTION_NAME = 4096
+            #if len(function_name) >= MAX_FUNCTION_NAME:
+            #    sys.stderr.write('warning: truncating function name with %u chars (%s)\n' % (len(function_name), function_name[:32] + '...'))
+            #    function_name = function_name[:MAX_FUNCTION_NAME - 1] + unichr(0x2026)
 
-            if self.wrap:
-                function_name = self.wrap_function_name(function_name)
-            labels.append(function_name)
+            #if self.wrap:
+            #    function_name = self.wrap_function_name(function_name)
+            #labels.append(function_name)
 
             for event in self.show_function_events:
                 if event in function.events:
-                    label = event.format(function[event])
-                    labels.append(label)
-            if function.called is not None:
-                labels.append("%u%s" % (function.called, MULTIPLICATION_SIGN))
-
-            if function.weight is not None:
-                weight = function.weight
-            else:
-                weight = 0.0
-
-            label = '\n'.join(labels)
-            self.node(function.id,
-                label = label,
-                color = self.color(theme.node_bgcolor(weight)),
-                fontcolor = self.color(theme.node_fgcolor(weight)),
-                fontsize = "%.2f" % theme.node_fontsize(weight),
-                tooltip = function.filename,
-            )
+                    #print(event.name)
+                    #print(event.format(function[event]), function[event], event.name, function.name)
+                    if event.name in self.profilingNodes.keys():
+                        self._graph.add(
+                            (function_node,
+                             self.profilingNodes[event.name],
+                             rdf.Literal(function[event]))
+                            )
 
             for _, call in sorted_iteritems(function.calls):
                 callee = profile.functions[call.callee_id]
+                callpath_name = function.name + "_" + callee.name
+                callpath_node = self.namespace["cp"][callpath_name]
+                dest_node = self.namespace["func"][callee.name]
 
-                labels = []
-                for event in self.show_edge_events:
-                    if event in call.events:
-                        label = event.format(call[event])
-                        labels.append(label)
-
-                if call.weight is not None:
-                    weight = call.weight
-                elif callee.weight is not None:
-                    weight = callee.weight
-                else:
-                    weight = 0.0
-
-                label = '\n'.join(labels)
-
-                self.edge(function.id, call.callee_id,
-                    label = label,
-                    color = self.color(theme.edge_color(weight)),
-                    fontcolor = self.color(theme.edge_color(weight)),
-                    fontsize = "%.2f" % theme.edge_fontsize(weight),
-                    penwidth = "%.2f" % theme.edge_penwidth(weight),
-                    labeldistance = "%.2f" % theme.edge_penwidth(weight),
-                    arrowsize = "%.2f" % theme.edge_arrowsize(weight),
+                self._graph.add(
+                    (function_node,
+                    self.namespace["hpc"].caller,
+                    callpath_node)
                 )
 
-        self.end_graph()
+                self._graph.add((
+                    callpath_node,
+                    self.namespace["rdf"].type,
+                    self.namespace["hpc"].Callpath
+                ))
 
-    def begin_graph(self):
-        self.write('digraph {\n')
+                self._graph.add((
+                    callpath_node,
+                    self.namespace["hpc"].destFunc,
+                    dest_node
+                ))
 
-    def end_graph(self):
-        self.write('}\n')
+                self._graph.add((
+                    callpath_node,
+                    self.namespace["hpc"].srcFunc,
+                    function_node
+                ))
 
-    def attr(self, what, **attrs):
-        self.write("\t")
-        self.write(what)
-        self.attr_list(attrs)
-        self.write(";\n")
+                self._graph.add((
+                    dest_node,
+                    self.namespace["rdf"].type,
+                    self.namespace["hpc"].Function
+                ))
 
-    def node(self, node, **attrs):
-        self.write("\t")
-        self.id(node)
-        self.attr_list(attrs)
-        self.write(";\n")
+                self._graph.add((
+                    dest_node,
+                    self.namespace["hpc"].upstreamCallPath,
+                    callpath_node
+                ))
 
-    def edge(self, src, dst, **attrs):
-        self.write("\t")
-        self.id(src)
-        self.write(" -> ")
-        self.id(dst)
-        self.attr_list(attrs)
-        self.write(";\n")
+                self._graph.add(
+                    (dest_node,
+                    self.namespace["hpc"].calledBy,
+                    function_node)
+                )
 
-    def attr_list(self, attrs):
-        if not attrs:
-            return
-        self.write(' [')
-        first = True
-        for name, value in sorted_iteritems(attrs):
-            if value is None:
-                continue
-            if first:
-                first = False
-            else:
-                self.write(", ")
-            self.id(name)
-            self.write('=')
-            self.id(value)
-        self.write(']')
-
-    def id(self, id):
-        if isinstance(id, (int, float)):
-            s = str(id)
-        elif isinstance(id, basestring):
-            if id.isalnum() and not id.startswith('0x'):
-                s = id
-            else:
-                s = self.escape(id)
-        else:
-            raise TypeError
-        self.write(s)
-
-    def color(self, rgb):
-        r, g, b = rgb
-
-        def float2int(f):
-            if f <= 0.0:
-                return 0
-            if f >= 1.0:
-                return 255
-            return int(255.0*f + 0.5)
-
-        return "#" + "".join(["%02x" % float2int(c) for c in (r, g, b)])
-
-    def escape(self, s):
-        if not PYTHON_3:
-            s = s.encode('utf-8')
-        s = s.replace('\\', r'\\')
-        s = s.replace('\n', r'\n')
-        s = s.replace('\t', r'\t')
-        s = s.replace('"', r'\"')
-        return '"' + s + '"'
+                #labels = []
+                for event in self.show_edge_events:
+                    if event in call.events:
+                        if event.name in self.profilingNodes.keys():
+                            self._graph.add(
+                                (callpath_node,
+                                 self.profilingNodes[event.name],
+                                 rdf.Literal(call[event]))
+                                )
 
     def write(self, s):
         self.fp.write(s)
@@ -3362,8 +3132,8 @@ def main(argv=sys.argv[1:]):
     formatNames = list(formats.keys())
     formatNames.sort()
 
-    themeNames = list(themes.keys())
-    themeNames.sort()
+    #themeNames = list(themes.keys())
+    #themeNames.sort()
 
     labelNames = list(labels.keys())
     labelNames.sort()
@@ -3392,11 +3162,11 @@ def main(argv=sys.argv[1:]):
         type="choice", choices=('callratios', 'callstacks'),
         dest="totalMethod", default=totalMethod,
         help="preferred method of calculating total time: callratios or callstacks (currently affects only perf format) [default: %default]")
-    optparser.add_option(
-        '-c', '--colormap',
-        type="choice", choices=themeNames,
-        dest="theme", default="color",
-        help="color map: %s [default: %%default]" % naturalJoin(themeNames))
+    #optparser.add_option(
+    #    '-c', '--colormap',
+    #    type="choice", choices=themeNames,
+    #    dest="theme", default="color",
+    #    help="color map: %s [default: %%default]" % naturalJoin(themeNames))
     optparser.add_option(
         '-s', '--strip',
         action="store_true",
@@ -3473,14 +3243,14 @@ with '%', a dump of all available information is performed for selected entries,
     if len(args) > 1 and options.format != 'pstats':
         optparser.error('incorrect number of arguments')
 
-    try:
-        theme = themes[options.theme]
-    except KeyError:
-        optparser.error('invalid colormap \'%s\'' % options.theme)
+    #try:
+    #    theme = themes[options.theme]
+    #except KeyError:
+    #    optparser.error('invalid colormap \'%s\'' % options.theme)
 
     # set skew on the theme now that it has been picked.
-    if options.theme_skew:
-        theme.skew = options.theme_skew
+    #if options.theme_skew:
+    #    theme.skew = options.theme_skew
 
     totalMethod = options.totalMethod
 
@@ -3519,7 +3289,7 @@ with '%', a dump of all available information is performed for selected entries,
         else:
             output = open(options.output, 'wt')
 
-    dot = DotWriter(output)
+    dot = RdfWriter(output)
     dot.strip = options.strip
     dot.wrap = options.wrap
 
@@ -3548,7 +3318,8 @@ with '%', a dump of all available information is performed for selected entries,
             sys.exit(1)
         profile.prune_leaf(leafIds, options.depth)
 
-    dot.graph(profile, theme)
+    dot.graph(profile)
+    print(dot._graph.serialize())
 
 
 if __name__ == '__main__':
