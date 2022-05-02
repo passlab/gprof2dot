@@ -21,32 +21,26 @@ It can:
   * use color efficiently to draw attention to hot-spots;
   * work on any platform where Python and Graphviz is available, i.e, virtually anywhere.
 
-# Example
-
-This is the result from the [example data](http://linuxgazette.net/100/misc/vinayak/overall-profile.txt) in the [Linux Gazette article](http://linuxgazette.net/100/vinayak.html) with the default settings:
-
-<!-- pngquant --speed=1 --ordered  --quality 0-85 ... -->
-![Sample](https://raw.githubusercontent.com/jrfonseca/gprof2dot/cf98cc0b5eae9fcb896a6f92e9bc2bcb27666515/sample.png)
-
 # Requirements
 
   * [Python](http://www.python.org/download/): known to work with version 2.7 and 3.3; it will most likely _not_ work with earlier releases.
-  * [Graphviz](http://www.graphviz.org/Download.php): tested with version 2.26.3, but should work fine with other versions.
+  * [rdflib](https://github.com/RDFLib/rdflib): tested with version 6.1.1
 
 ## Windows users
 
   * Download and install [Python for Windows](http://www.python.org/download/)
-  * Download and install [Graphviz for Windows](http://www.graphviz.org/Download_windows.php)
 
 ## Linux users
 
 On Debian/Ubuntu run:
 
-    apt-get install python3 graphviz
+    apt-get install python3 
+    pip3 install rdflib
 
 On RedHat/Fedora run
 
-    yum install python3 graphviz
+    yum install python3
+    pip3 install rdflib
 
 
 # Download
@@ -82,9 +76,6 @@ On RedHat/Fedora run
       --total=TOTALMETHOD   preferred method of calculating total time: callratios
                             or callstacks (currently affects only perf format)
                             [default: callratios]
-      -c THEME, --colormap=THEME
-                            color map: color, pink, gray, bw, or print [default:
-                            color]
       -s, --strip           strip function parameters, template parameters, and
                             const modifiers from demangled C++ function names
       -w, --wrap            wrap function names
@@ -99,16 +90,13 @@ On RedHat/Fedora run
 							as with -z(--root) and -l(--leaf). Special cases SELECT="+"
 							gets the full list, selector starting with "%" cause dump 
 							of all available information. 
-      --skew=THEME_SKEW     skew the colorization curve.  Values < 1.0 give more
-                            variety to lower percentages.  Values > 1.0 give less
-                            variety to lower percentages
 
 ## Examples
 
 ### Linux perf
 
     perf record -g -- /path/to/your/executable
-    perf script | c++filt | gprof2dot.py -f perf | dot -Tpng -o output.png
+    perf script | c++filt | gprof2dot.py -f perf 
 
 ### oprofile
 
@@ -117,7 +105,7 @@ On RedHat/Fedora run
     /path/to/your/executable arg1 arg2
     opcontrol --stop
     opcontrol --dump
-    opreport -cgf | gprof2dot.py -f oprofile | dot -Tpng -o output.png
+    opreport -cgf | gprof2dot.py -f oprofile 
 
 ### xperf
 
@@ -147,7 +135,7 @@ If you're not familiar with xperf then read [this excellent article](http://blog
 
   * Then invoke gprof2dot as
 
-        gprof2dot.py -f xperf output.csv | dot -Tpng -o output.png
+        gprof2dot.py -f xperf output.csv
 
 ### VTune Amplifier XE
 
@@ -165,29 +153,29 @@ See also [Kirill Rogozhin's blog post](http://software.intel.com/en-us/blogs/201
 ### gprof
 
     /path/to/your/executable arg1 arg2
-    gprof path/to/your/executable | gprof2dot.py | dot -Tpng -o output.png
+    gprof path/to/your/executable | gprof2dot.py 
 
 ### python profile
 
     python -m profile -o output.pstats path/to/your/script arg1 arg2
-    gprof2dot.py -f pstats output.pstats | dot -Tpng -o output.png
+    gprof2dot.py -f pstats output.pstats 
 
 ### python cProfile (formerly known as lsprof)
 
     python -m cProfile -o output.pstats path/to/your/script arg1 arg2
-    gprof2dot.py -f pstats output.pstats | dot -Tpng -o output.png
+    gprof2dot.py -f pstats output.pstats 
 
 ### Java HPROF
 
     java -agentlib:hprof=cpu=samples ...
-    gprof2dot.py -f hprof java.hprof.txt | dot -Tpng -o output.png
+    gprof2dot.py -f hprof java.hprof.txt 
 
 See [Russell Power's blog post](http://rjp.io/2012/07/03/java-profiling/) for details.
 
 ### DTrace
 
     dtrace -x ustackframes=100 -n 'profile-97 /pid == 12345/ { @[ustack()] = count(); } tick-60s { exit(0); }' -o out.user_stacks
-    gprof2dot.py -f dtrace out.user_stacks | dot -Tpng -o output.png
+    gprof2dot.py -f dtrace out.user_stacks 
 
     # Notice: sometimes, the dtrace outputs format may be latin-1, and gprof2dot will fail to parse it.
     # To solve this problem, you should use iconv to convert to UTF-8 explicitly.
@@ -196,36 +184,20 @@ See [Russell Power's blog post](http://rjp.io/2012/07/03/java-profiling/) for de
 
 ## Output
 
-TODO: Update this to reflect gprof2rdf
+The output of gprof2rdf is an RDF knowledge graph that maps functions and callpaths to values obtained from the given profile information, which can be used for querying or merging to create a larger callgraph. The ontology an extension of the normal HPC specificiation and is as follows:
 
-A node in the output graph represents a function and has the following layout:
+?f `hpc:selfTime`: `xsd:float` - Reflects the amount of the time the function was in itself (not in other function calls)
+?f `hpc:totalTime`: `xsd:float` - Reflects the total amount of time the function was being executed
+?f `hpc:called` `xsd:integer` - Counts the number of time a function was called
+?f `hpc:caller` - Links a caller to a callpath
+?f `hpc:upstreamCallPath` - Links a callee to a callpath
 
-    +------------------------------+
-    |        function name         |
-    | total time % ( self time % ) |
-    |         total calls          |
-    +------------------------------+
+?c `hpc:srcFunc` - Indicates the source function (caller) of the given callpath
+?c `hpc:destFunc` - Indicates the destination function (callee) of the given callpath
+?c `hpc:selfTime`: `xsd:float` - Reflects the amount of the time the callpath was in itself (not in other function calls)
+?c `hpc:totalTime`: `xsd:float` - Reflects the total amount of time the callpath was being executed
+?c `hpc:called` `xsd:integer` - Counts the number of time a callpath was called
 
-where:
-
-  * _total time %_ is the percentage of the running time spent in this function and all its children;
-  * _self time %_ is the percentage of the running time spent in this function alone;
-  * _total calls_ is the total number of times this function was called (including recursive calls).
-
-An edge represents the calls between two functions and has the following layout:
-
-               total time %
-                  calls
-    parent --------------------> children
-
-Where:
-
-  * _total time %_ is the percentage of the running time transfered from the children to this parent (if available);
-  * _calls_ is the number of calls the parent function called the children.
-
-Note that in recursive cycles, the _total time %_ in the node is the same for the whole functions in the cycle, and there is no _total time %_ figure in the edges inside the cycle, since such figure would make no sense.
-
-The color of the nodes and edges varies according to the _total time %_ value. In the default _temperature-like_ color-map, functions where most time is spent (hot-spots) are marked as saturated red, and functions where little time is spent are marked as dark blue. Note that functions where negligible or no time is spent do not appear in the graph by default.
 
 ## Listing functions
 
