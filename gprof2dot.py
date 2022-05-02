@@ -155,8 +155,9 @@ labels = {
     'self-time-percentage': TIME_RATIO,
     'total-time': TOTAL_TIME,
     'total-time-percentage': TOTAL_TIME_RATIO,
+    'called': CALLS
 }
-defaultLabelNames = ['total-time', 'self-time']
+defaultLabelNames = ['total-time', 'self-time', 'called']
 
 totalMethod = 'callratios'
 
@@ -1333,6 +1334,7 @@ class GprofParser(Parser):
         for entry in compat_itervalues(self.functions):
             # populate the function
             function = Function(entry.index, entry.name)
+            #print(entry)
             function[TIME] = entry.self
             if entry.called is not None:
                 function.called = entry.called
@@ -1340,6 +1342,8 @@ class GprofParser(Parser):
                 call = Call(entry.index)
                 call[CALLS] = entry.called_self
                 function.called += entry.called_self
+
+            function[CALLS] = entry.called
 
             # populate the function calls
             for child in entry.children:
@@ -3006,7 +3010,7 @@ class RdfWriter:
 
         return name
 
-    show_function_events = [TOTAL_TIME, TIME]
+    show_function_events = [TOTAL_TIME, TIME, CALLS]
     show_edge_events = [TOTAL_TIME, TIME, CALLS]
 
     def graph(self, profile):
@@ -3146,11 +3150,11 @@ def main(argv=sys.argv[1:]):
         help="output filename [stdout]")
     optparser.add_option(
         '-n', '--node-thres', metavar='PERCENTAGE',
-        type="float", dest="node_thres", default=0.5,
+        type="float", dest="node_thres", default=0,
         help="eliminate nodes below this threshold [default: %default]")
     optparser.add_option(
         '-e', '--edge-thres', metavar='PERCENTAGE',
-        type="float", dest="edge_thres", default=0.1,
+        type="float", dest="edge_thres", default=0,
         help="eliminate edges below this threshold [default: %default]")
     optparser.add_option(
         '-f', '--format',
